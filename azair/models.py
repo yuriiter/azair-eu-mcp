@@ -36,6 +36,10 @@ class Airport(BaseModel):
 class SearchParams(BaseModel):
     src_airport: str = Field(description="Source airport IATA code")
     dst_airport: str = Field(description="Destination IATA code (XXX for anywhere)")
+    src_airports: Optional[list[str]] = Field(default=None, description="Additional source airports, e.g. BRQ, NUE together with PRG")
+    dst_airports: Optional[list[str]] = Field(default=None, description="Additional destination airports, e.g. LIN, BGY together with MXP")
+    src_metro_code: Optional[str] = Field(default=None, description="Source metro code covering all its airports, e.g. MIL_ALL")
+    dst_metro_code: Optional[str] = Field(default=None, description="Destination metro code covering all its airports, e.g. MIL_ALL")
     dep_date: str = Field(description="Earliest departure date, DD.MM.YYYY or YYYY-MM-DD")
     arr_date: str = Field(description="Latest return date, DD.MM.YYYY or YYYY-MM-DD")
     min_days_stay: int = Field(default=2, ge=0, le=30)

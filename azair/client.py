@@ -35,6 +35,21 @@ def _weekday_bit(weekdays: list[int] | None) -> dict[str, str]:
     return bits
 
 
+def _airport_value(main_code: str, extras: list[str] | None) -> str:
+    if not extras:
+        return f" [{main_code}]"
+    extra = ",".join(c for c in extras if c != main_code)
+    return f" [{main_code}] (+{extra})"
+
+
+def _extra_params(prefix: str, extras: list[str] | None) -> dict[str, str]:
+    params = {}
+    if extras:
+        for i, code in enumerate(c for c in extras if c):
+            params[f"{prefix}ap{i}"] = code
+    return params
+
+
 def build_search_url(params: SearchParams) -> str:
     dep = _normalize_date(params.dep_date)
     arr = _normalize_date(params.arr_date)
@@ -43,15 +58,15 @@ def build_search_url(params: SearchParams) -> str:
     query = {
         "searchtype": "flexi",
         "tp": "0",
-        "srcAirport": f" [{params.src_airport}]",
+        "srcAirport": _airport_value(params.src_airport, params.src_airports),
         "srcTypedText": params.src_airport.lower()[:3],
         "srcFreeTypedText": "",
-        "srcMC": "",
+        "srcMC": params.src_metro_code or "",
         "srcFreeAirport": "",
-        "dstAirport": f" [{params.dst_airport}]",
+        "dstAirport": _airport_value(params.dst_airport, params.dst_airports),
         "dstTypedText": "anyw" if params.dst_airport == "XXX" else params.dst_airport.lower()[:3],
         "dstFreeTypedText": "",
-        "dstMC": "",
+        "dstMC": params.dst_metro_code or "",
         "adults": str(params.adults),
         "children": str(params.children),
         "infants": str(params.infants),
@@ -80,6 +95,8 @@ def build_search_url(params: SearchParams) -> str:
         "isOneway": "oneway" if params.is_oneway else "return",
         "resultSubmit": "Search",
         **weekday_bits,
+        **_extra_params("src", params.src_airports),
+        **_extra_params("dst", params.dst_airports),
     }
 
     return f"{SEARCH_URL}?{urlencode(query)}"

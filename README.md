@@ -12,6 +12,10 @@ Full-featured flight search mirroring all azair form parameters.
 |-----------|------|---------|-------------|
 | `src_airport` | string | — | IATA code (e.g. `WMI`, `STN`) |
 | `dst_airport` | string | — | IATA code or `XXX` for anywhere |
+| `src_airports` | string[] | — | Additional source airports, e.g. `BRQ`, `NUE` together with `PRG` |
+| `dst_airports` | string[] | — | Additional destination airports, e.g. `LIN`, `BGY` together with `MXP` |
+| `src_metro_code` | string | — | Source metro code covering all its airports, e.g. `MIL_ALL` |
+| `dst_metro_code` | string | — | Destination metro code covering all its airports, e.g. `MIL_ALL` |
 | `dep_date` | string | — | Earliest departure, `DD.MM.YYYY` or `YYYY-MM-DD` |
 | `arr_date` | string | — | Latest return, `DD.MM.YYYY` or `YYYY-MM-DD` |
 | `min_days_stay` | int | `2` | Minimum trip length |
