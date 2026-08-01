@@ -13,21 +13,39 @@ from azair.airports import AirportDB
 airport_db = AirportDB()
 
 
+def _unwrap(annotation):
+    origin = getattr(annotation, "__origin__", None)
+    if origin is not None and not isinstance(origin, type):
+        args = getattr(annotation, "__args__", ())
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            return _unwrap(non_none[0])
+    return annotation
+
+
 def _describe_search_params() -> dict:
     fields = SearchParams.model_fields
     props = {}
     for name, field in fields.items():
-        js_type = "string"
-        annotation = field.annotation
+        annotation = _unwrap(field.annotation)
         origin = getattr(annotation, "__origin__", None)
-        if origin is not None:
-            annotation = origin
-        if annotation in (int, float):
-            js_type = "number"
+        if origin in (list, set):
+            args = getattr(annotation, "__args__", ())
+            inner = args[0] if args else int
+            inner_type = "integer" if inner is int else "number" if inner is float else "string"
+            prop = {"type": "array", "items": {"type": inner_type}}
+        elif annotation is int:
+            prop = {"type": "integer"}
+        elif annotation is float:
+            prop = {"type": "number"}
         elif annotation is bool:
-            js_type = "boolean"
-        desc = field.description or name.replace("_", " ")
-        props[name] = {"type": js_type, "description": desc}
+            prop = {"type": "boolean"}
+        else:
+            prop = {"type": "string"}
+        prop["description"] = field.description or name.replace("_", " ")
+        if field.default is not None:
+            prop["default"] = field.default
+        props[name] = prop
     return {
         "type": "object",
         "properties": props,
@@ -40,7 +58,7 @@ async def list_tools(_session: ServerSession | None = None, _params: Any = None)
         tools=[
             Tool(
                 name="search_flights",
-                description="Search for cheap flights on azair.eu. Supports flexible date searches across European low-cost airlines.",
+                description="Search for cheap flights on azair.eu across European low-cost airlines. Supports flexible date ranges, multiple airports per side, metro-area codes (e.g. MIL_ALL), anywhere (XXX), one-way or return, and all advanced filters (weekdays, time windows, stopover limits, overnight waits, transfers, Schengen-only).",
                 inputSchema=_describe_search_params(),
             ),
             Tool(

@@ -21,17 +21,13 @@ def _normalize_date(d: str) -> str:
     return d
 
 
-def _weekday_bit(weekdays: list[int] | None) -> dict[str, str]:
+def _weekday_bit(departure: list[int] | None, ret: list[int] | None) -> dict[str, str]:
+    dep_days = departure if departure is not None else list(range(7))
+    arr_days = ret if ret is not None else list(range(7))
     bits = {}
-    if weekdays is None:
-        for i in range(7):
-            bits[f"dep{i}"] = "true"
-            bits[f"arr{i}"] = "true"
-    else:
-        for i in range(7):
-            bits[f"dep{i}"] = "true" if i in weekdays else "false"
-        for i in range(7):
-            bits[f"arr{i}"] = "true" if i in weekdays else "false"
+    for i in range(7):
+        bits[f"dep{i}"] = "true" if i in dep_days else "false"
+        bits[f"arr{i}"] = "true" if i in arr_days else "false"
     return bits
 
 
@@ -53,7 +49,7 @@ def _extra_params(prefix: str, extras: list[str] | None) -> dict[str, str]:
 def build_search_url(params: SearchParams) -> str:
     dep = _normalize_date(params.dep_date)
     arr = _normalize_date(params.arr_date)
-    weekday_bits = _weekday_bit(params.departure_weekdays)
+    weekday_bits = _weekday_bit(params.departure_weekdays, params.return_weekdays)
 
     query = {
         "searchtype": "flexi",

@@ -86,7 +86,7 @@ Full-featured flight search mirroring the azair search form, including advanced 
 | `children` | int | `0` | Children (0-8) |
 | `infants` | int | `0` | Infants (0-8) |
 | `currency` | string | `EUR` | `EUR`, `USD`, `GBP`, `PLN`, `CZK`, … |
-| `max_changes` | int | `1` | Max stopovers (1-3) |
+| `max_changes` | int | `1` | Max stopovers per leg (0-3, `0` = direct flights only) |
 | `is_oneway` | bool | `false` | One-way instead of return |
 | `schengen_only` | bool | `false` | Only transfers inside the Schengen area |
 | `allow_transfer` | bool | `false` | Allow ground transfer between airports |
