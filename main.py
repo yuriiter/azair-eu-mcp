@@ -1,5 +1,6 @@
 import json
 from typing import Any
+from pydantic_core import PydanticUndefined
 from mcp.server import Server
 
 from mcp.types import Tool, TextContent, CallToolResult, ListToolsResult, CallToolRequestParams
@@ -43,7 +44,7 @@ def _describe_search_params() -> dict:
         else:
             prop = {"type": "string"}
         prop["description"] = field.description or name.replace("_", " ")
-        if field.default is not None:
+        if field.default is not PydanticUndefined:
             prop["default"] = field.default
         props[name] = prop
     return {
