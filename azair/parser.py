@@ -4,7 +4,7 @@ from .models import FlightResult, FlightSegment
 
 
 PRICE_RE = re.compile(r"[€$£złFtKčkrруб₴р.₪¥]\s*([\d.]+)")
-DAYS_RE = re.compile(r"(\d+)\s*days")
+DAYS_RE = re.compile(r"(\d+)\s*days?")
 
 
 def _parse_price(text: str) -> float:

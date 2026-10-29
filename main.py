@@ -7,8 +7,7 @@ from mcp.types import Tool, TextContent, CallToolResult, ListToolsResult, CallTo
 from mcp.server.session import ServerSession
 
 from azair.models import SearchParams
-from azair.client import fetch_search_results
-from azair.parser import parse_results
+from azair.client import search_flights
 from azair.airports import AirportDB
 
 airport_db = AirportDB()
@@ -88,8 +87,7 @@ async def call_tool(_session: ServerSession | None = None, params: CallToolReque
 
     if name == "search_flights":
         search_params = SearchParams(**arguments)
-        html = await fetch_search_results(search_params)
-        results = parse_results(html)
+        results = await search_flights(search_params)
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps([r.model_dump() for r in results], indent=2))]
         )

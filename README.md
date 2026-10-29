@@ -72,12 +72,12 @@ Full-featured flight search mirroring the azair search form, including advanced 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `src_airport` | string | — | Source airport IATA code (e.g. `WMI`, `STN`) |
-| `dst_airport` | string | — | Destination IATA code or `XXX` for anywhere |
+| `src_airport` | string | — | Source airport IATA code (e.g. `WMI`, `STN`). Metro/region codes such as `MIL_ALL`, `PAR_ALL`, `IT`, `BALTIC` are expanded automatically |
+| `dst_airport` | string | — | Destination IATA code, `XXX` for anywhere, or a metro/region code such as `MIL_ALL`, `PAR_ALL`, `IT`, `BALTIC` |
 | `src_airports` | string[] | — | Additional source airports, e.g. `BRQ`, `NUE` together with `PRG` |
 | `dst_airports` | string[] | — | Additional destination airports, e.g. `LIN`, `BGY` together with `MXP` |
-| `src_metro_code` | string | — | Source metro code covering all its airports, e.g. `MIL_ALL` |
-| `dst_metro_code` | string | — | Destination metro code covering all its airports, e.g. `MIL_ALL` |
+| `src_metro_code` | string | — | Source metro/region code covering several airports, e.g. `MIL_ALL`, `LON_ALL`, `IT`; expanded automatically |
+| `dst_metro_code` | string | — | Destination metro/region code covering several airports, e.g. `MIL_ALL`, `PAR_ALL`, `LON_ALL`, `IT`; expanded automatically |
 | `dep_date` | string | — | Earliest departure, `DD.MM.YYYY` or `YYYY-MM-DD` |
 | `arr_date` | string | — | Latest return, `DD.MM.YYYY` or `YYYY-MM-DD` |
 | `min_days_stay` | int | `2` | Minimum trip length in days |
@@ -89,7 +89,7 @@ Full-featured flight search mirroring the azair search form, including advanced 
 | `max_changes` | int | `1` | Max stopovers per leg (0-3, `0` = direct flights only) |
 | `is_oneway` | bool | `false` | One-way instead of return |
 | `schengen_only` | bool | `false` | Only transfers inside the Schengen area |
-| `allow_transfer` | bool | `false` | Allow ground transfer between airports |
+| `allow_transfer` | bool | `false` | Allow ground transfer between airports; automatically enabled for open-jaw searches (`same_arr=false`/`same_dep=false`) with a specific destination |
 | `departure_weekdays` | int[] | all | Departure weekdays, `0=Mon..6=Sun` |
 | `return_weekdays` | int[] | all | Return weekdays |
 | `min_hour_outbound` | string | `0:00` | Earliest outbound time |
@@ -180,9 +180,11 @@ asyncio.run(main())
 
 - Azair exposes no public JSON API — results are scraped from the HTML search results page (`azfin.php`)
 - The airport database is fetched once from azair's static JS asset and cached in memory
-- Multi-airport and metro codes are sent exactly as the azair web app does (bracket notation + `srcapN`/`dstapN` params)
+- Multi-airport and metro codes are sent as the azair web app does (bracket notation + `srcapN`/`dstapN` params)
+- Open-jaw searches automatically set azair's `transfer` flag, which is required to search different arrival/return airports
+- If azair returns nothing for a wide stay range (e.g. 1-3 days) even though shorter trips exist, the server retries each narrower range and merges the results
 
 ## Notes
 
-- Azair uses an expired SSL certificate — the server bypasses SSL verification
 - Search times vary (10-60s) depending on the query scope
+- Azair's `XXX` (anywhere) mode does not support open-jaw trips; it returns same-airport round-trips
