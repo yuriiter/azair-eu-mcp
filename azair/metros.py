@@ -144,6 +144,5 @@ METRO_AIRPORTS: dict[str, tuple[str, list[str]]] = {
     "VEN_ALL": ("Venice", ["VCE", "TSF"]),
     "WAR_ALL": ("Warsaw", ["WAW", "WMI"]),
     "XK": ("Kosovo", ["PRN"]),
-    "XXX": ("Anywhere", ["NULL"]),
     "XXX": ("Anywhere", ["XXX"]),
 }

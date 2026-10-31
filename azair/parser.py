@@ -3,21 +3,71 @@ import re
 from .models import FlightResult, FlightSegment
 
 
-PRICE_RE = re.compile(r"[€$£złFtKčkrруб₴р.₪¥]\s*([\d.]+)")
+NUMBER_RE = re.compile(
+    r"(?<![\d])(?:\d{1,3}(?:[ \u00a0\u202f,]\d{3})+|\d+)(?:[.,]\d+)?(?![\d])"
+)
 DAYS_RE = re.compile(r"(\d+)\s*days?")
+
+CURRENCY_SYMBOLS = (
+    ("руб", "RUB"),
+    ("Kč", "CZK"),
+    ("zł", "PLN"),
+    ("Ft", "HUF"),
+    ("kr", "DKK"),
+    ("₴", "UAH"),
+    ("₪", "ILS"),
+    ("¥", "JPY"),
+    ("р.", "BYR"),
+    ("€", "EUR"),
+    ("$", "USD"),
+    ("£", "GBP"),
+    ("TRY", "TRY"),
+    ("BYR", "BYR"),
+    ("BYN", "BYN"),
+    ("RUB", "RUB"),
+    ("CZK", "CZK"),
+    ("PLN", "PLN"),
+    ("HUF", "HUF"),
+    ("DKK", "DKK"),
+    ("UAH", "UAH"),
+    ("ILS", "ILS"),
+    ("JPY", "JPY"),
+    ("EUR", "EUR"),
+    ("USD", "USD"),
+    ("GBP", "GBP"),
+)
+
+
+def _normalize_number(raw: str) -> float:
+    text = raw.replace(" ", "").replace("\u00a0", "").replace("\u202f", "")
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        parts = text.split(",")
+        if len(parts) == 2 and len(parts[1]) == 3:
+            text = text.replace(",", "")
+        else:
+            text = text.replace(",", ".")
+    return float(text)
 
 
 def _parse_price(text: str) -> float:
-    m = PRICE_RE.search(text)
-    return float(m.group(1)) if m else 0.0
+    match = NUMBER_RE.search(text)
+    if not match:
+        return 0.0
+    try:
+        return _normalize_number(match.group(0))
+    except ValueError:
+        return 0.0
 
 
 def _extract_currency(text: str) -> str:
-    symbols = {"€": "EUR", "$": "USD", "£": "GBP", "Kč": "CZK", "kr": "DKK",
-               "zł": "PLN", "Ft": "HUF", "руб": "RUB", "₴": "UAH", "р.": "BYN", "₪": "ILS", "¥": "JPY"}
-    for sym, cur in symbols.items():
-        if sym in text:
-            return cur
+    for symbol, currency in CURRENCY_SYMBOLS:
+        if symbol in text:
+            return currency
     return "EUR"
 
 

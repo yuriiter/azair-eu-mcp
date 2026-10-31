@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import re
 from urllib.parse import urlencode
@@ -24,8 +25,8 @@ def _normalize_date(d: str) -> str:
 
 
 def _weekday_bit(departure: list[int] | None, ret: list[int] | None) -> dict[str, str]:
-    dep_days = departure if departure is not None else list(range(7))
-    arr_days = ret if ret is not None else list(range(7))
+    dep_days = set(departure) if departure else set(range(7))
+    arr_days = set(ret) if ret else set(range(7))
     bits = {}
     for i in range(7):
         bits[f"dep{i}"] = "true" if i in dep_days else "false"
@@ -33,12 +34,27 @@ def _weekday_bit(departure: list[int] | None, ret: list[int] | None) -> dict[str
     return bits
 
 
+AIRPORT_CODE_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def _expand_extra_codes(extras: list[str] | None) -> list[str]:
+    result = []
+    for raw in extras or []:
+        code = (raw or "").strip().upper()
+        if not code or code == "XXX":
+            continue
+        if code in METRO_AIRPORTS:
+            result.extend(METRO_AIRPORTS[code][1])
+        elif AIRPORT_CODE_RE.match(code):
+            result.append(code)
+    return result
+
+
 def _dedupe_extras(main_code: str, extras: list[str] | None) -> list[str]:
     seen = {main_code.upper()}
     result = []
-    for code in extras or []:
-        code = (code or "").strip().upper()
-        if not code or code in seen:
+    for code in _expand_extra_codes(extras):
+        if code in seen:
             continue
         seen.add(code)
         result.append(code)
@@ -62,23 +78,21 @@ def _expand_airport(
     metro_code = (metro_code or "").strip().upper() or None
 
     if code == "XXX":
-        return code, _dedupe_extras(code, extras), metro_code
+        return code, [], None
 
     if code in METRO_AIRPORTS:
         ports = METRO_AIRPORTS[code][1]
         main = ports[0]
         extras = ports[1:] + extras
-        mc = code if code.endswith("_ALL") else None
-        return main, _dedupe_extras(main, extras), mc
+        return main, _dedupe_extras(main, extras), code
 
-    if metro_code in METRO_AIRPORTS:
+    if metro_code in METRO_AIRPORTS and metro_code != "XXX":
         ports = METRO_AIRPORTS[metro_code][1]
         main = code if code in ports else ports[0]
         extras = [p for p in ports if p != main] + extras
-        mc = metro_code if metro_code.endswith("_ALL") else None
-        return main, _dedupe_extras(main, extras), mc
+        return main, _dedupe_extras(main, extras), metro_code
 
-    return code, _dedupe_extras(code, extras), metro_code
+    return code, _dedupe_extras(code, extras), None
 
 
 def _airport_value(main_code: str, extras: list[str]) -> str:
@@ -145,7 +159,11 @@ def build_search_url(params: SearchParams) -> str:
         "schengen": "true" if params.schengen_only else "false",
         "transfer": "true" if (
             params.allow_transfer
-            or (dst_main != "XXX" and (not params.same_dep or not params.same_arr))
+            or (
+                not params.is_oneway
+                and dst_main != "XXX"
+                and (not params.same_dep or not params.same_arr)
+            )
         ) else "false",
         "samedep": "true" if params.same_dep else "false",
         "samearr": "true" if params.same_arr else "false",
@@ -203,21 +221,46 @@ def _dedupe_results(results: list[FlightResult]) -> list[FlightResult]:
     return unique
 
 
+MAX_STAY_RETRIES = 3
+
+
+async def _search_once(params: SearchParams) -> list[FlightResult]:
+    return parse_results(await fetch_search_results(params))
+
+
 async def search_flights(params: SearchParams) -> list[FlightResult]:
-    """Search azair and work around its unreliable stay-range handling.
+    """Search azair and work around its unreliable empty responses.
 
-    azair sometimes returns no results when ``min_days_stay`` and
-    ``max_days_stay`` span several lengths (e.g. 1-3) even though shorter
-    trips exist. In that case, retry progressively wider stay ranges and
-    merge whatever is found.
+    azair occasionally answers a valid query with an empty/error page. Retry
+    the same query once before giving up. It also sometimes returns no results
+    when ``min_days_stay`` and ``max_days_stay`` span several lengths (e.g.
+    1-3) even though shorter trips exist, so retry a bounded number of
+    narrower stay ranges and merge whatever is found.
     """
-    results = parse_results(await fetch_search_results(params))
-    if results or params.min_days_stay == params.max_days_stay:
-        return results
+    results = await _search_once(params)
 
-    for max_stay in range(params.min_days_stay, params.max_days_stay + 1):
+    if not results:
+        await asyncio.sleep(1)
+        results = await _search_once(params)
+
+    if (
+        results
+        or params.is_oneway
+        or params.min_days_stay >= params.max_days_stay
+    ):
+        return _dedupe_results(results)
+
+    # The initial request already covered max_days_stay; try the shorter
+    # ranges. Keep the number of retries bounded so huge ranges cannot turn
+    # into dozens of slow requests.
+    candidates = list(range(params.min_days_stay, params.max_days_stay))
+    if len(candidates) > MAX_STAY_RETRIES:
+        step = len(candidates) / MAX_STAY_RETRIES
+        candidates = sorted({candidates[int(i * step)] for i in range(MAX_STAY_RETRIES)})
+
+    for max_stay in candidates:
         retry_params = params.model_copy(update={"max_days_stay": max_stay})
-        retry_results = parse_results(await fetch_search_results(retry_params))
+        retry_results = await _search_once(retry_params)
         if retry_results:
             results.extend(retry_results)
 

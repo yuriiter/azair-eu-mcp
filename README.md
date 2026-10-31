@@ -104,13 +104,13 @@ Full-featured flight search mirroring the azair search form, including advanced 
 
 ### `search_airports`
 
-Resolve IATA codes and airport names before searching — useful for finding the right code for a city.
+Resolve IATA codes, airport names, and metro/region codes before searching — useful for finding the right code for a city.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `query` | string | IATA code or partial name (e.g. `WMI`, `London`, `Barcelona`) |
+| `query` | string | IATA code, metro/region code, or partial name (e.g. `WMI`, `MIL_ALL`, `London`, `Barcelona`) |
 
-Returns up to 50 matching airports with code and name.
+Returns up to 50 matching airports and metro/region codes with code and name.
 
 ## Installation
 
@@ -182,7 +182,9 @@ asyncio.run(main())
 - The airport database is fetched once from azair's static JS asset and cached in memory
 - Multi-airport and metro codes are sent as the azair web app does (bracket notation + `srcapN`/`dstapN` params)
 - Open-jaw searches automatically set azair's `transfer` flag, which is required to search different arrival/return airports
-- If azair returns nothing for a wide stay range (e.g. 1-3 days) even though shorter trips exist, the server retries each narrower range and merges the results
+- If azair returns nothing for a wide stay range (e.g. 1-3 days) even though shorter trips exist, the server retries a bounded number of narrower ranges and merges the results
+- Transient empty responses from azair are retried once before falling back to narrower stay ranges
+- Metro and region codes set azair's `srcMC`/`dstMC` field, which is required for some country/region searches
 
 ## Notes
 

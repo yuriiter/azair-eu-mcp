@@ -1,5 +1,8 @@
 import json
 from typing import Any
+
+import httpx
+from pydantic import ValidationError
 from pydantic_core import PydanticUndefined
 from mcp.server import Server
 
@@ -86,15 +89,37 @@ async def call_tool(_session: ServerSession | None = None, params: CallToolReque
     arguments = params.arguments or {}
 
     if name == "search_flights":
-        search_params = SearchParams(**arguments)
-        results = await search_flights(search_params)
+        try:
+            search_params = SearchParams(**arguments)
+            results = await search_flights(search_params)
+        except ValidationError as exc:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Invalid search parameters:\n{exc}")],
+                isError=True,
+            )
+        except httpx.HTTPError as exc:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Flight search failed: {exc}")],
+                isError=True,
+            )
+        except Exception as exc:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Flight search failed: {type(exc).__name__}: {exc}")],
+                isError=True,
+            )
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps([r.model_dump() for r in results], indent=2))]
         )
 
     if name == "search_airports":
         query = arguments.get("query", "")
-        airports = await airport_db.search(query)
+        try:
+            airports = await airport_db.search(query)
+        except httpx.HTTPError as exc:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Airport lookup failed: {exc}")],
+                isError=True,
+            )
         if not airports:
             return CallToolResult(
                 content=[TextContent(type="text", text="No airports found.")]

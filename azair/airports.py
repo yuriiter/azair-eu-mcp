@@ -1,6 +1,7 @@
 import re
 from .models import Airport
 from .client import fetch_airports_js
+from .metros import METRO_AIRPORTS
 
 
 JS_OBJECT_RE = re.compile(r"var\s+airportsArray\s*=\s*(\{.*?\});", re.DOTALL)
@@ -25,6 +26,13 @@ class AirportDB:
         results = []
         for code, name in self._airports.items():
             if q == code:
+                return [Airport(code=code, name=name)]
+            if q in name.upper() or (len(q) >= 2 and q in code):
+                results.append(Airport(code=code, name=name))
+        for code, (name, ports) in METRO_AIRPORTS.items():
+            if q == code:
+                if ports and ports != ["XXX"]:
+                    name = f"{name} (all airports: {', '.join(ports)})"
                 return [Airport(code=code, name=name)]
             if q in name.upper() or (len(q) >= 2 and q in code):
                 results.append(Airport(code=code, name=name))
