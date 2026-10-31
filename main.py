@@ -84,7 +84,10 @@ async def list_tools(_session: ServerSession | None = None, _params: Any = None)
 
 async def call_tool(_session: ServerSession | None = None, params: CallToolRequestParams | None = None) -> CallToolResult:
     if params is None:
-        return CallToolResult(content=[TextContent(type="text", text="Missing params")])
+        return CallToolResult(
+            content=[TextContent(type="text", text="Missing params")],
+            isError=True,
+        )
     name = params.name
     arguments = params.arguments or {}
 
@@ -112,12 +115,22 @@ async def call_tool(_session: ServerSession | None = None, params: CallToolReque
         )
 
     if name == "search_airports":
-        query = arguments.get("query", "")
+        query = str(arguments.get("query", "")).strip()
+        if not query:
+            return CallToolResult(
+                content=[TextContent(type="text", text="Query must not be empty.")],
+                isError=True,
+            )
         try:
             airports = await airport_db.search(query)
         except httpx.HTTPError as exc:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"Airport lookup failed: {exc}")],
+                isError=True,
+            )
+        except Exception as exc:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Airport lookup failed: {type(exc).__name__}: {exc}")],
                 isError=True,
             )
         if not airports:
@@ -128,7 +141,10 @@ async def call_tool(_session: ServerSession | None = None, params: CallToolReque
             content=[TextContent(type="text", text=json.dumps([a.model_dump() for a in airports], indent=2))]
         )
 
-    raise ValueError(f"Unknown tool: {name}")
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"Unknown tool: {name}")],
+        isError=True,
+    )
 
 
 server = Server(

@@ -1,7 +1,9 @@
 import asyncio
-import httpx
 import re
+import time
 from urllib.parse import urlencode
+
+import httpx
 from .metros import METRO_AIRPORTS
 from .models import FlightResult, SearchParams
 from .parser import parse_results
@@ -179,9 +181,14 @@ def build_search_url(params: SearchParams) -> str:
     return f"{SEARCH_URL}?{urlencode(query)}"
 
 
-async def fetch_search_results(params: SearchParams) -> str:
+SEARCH_TIMEOUT_SECONDS = 60.0
+
+
+async def fetch_search_results(
+    params: SearchParams, timeout: float = SEARCH_TIMEOUT_SECONDS
+) -> str:
     url = build_search_url(params)
-    async with httpx.AsyncClient(headers=HEADERS, timeout=60.0) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=timeout) as client:
         resp = await client.get(url)
         resp.raise_for_status()
         return resp.text
@@ -206,11 +213,25 @@ def _dedupe_results(results: list[FlightResult]) -> list[FlightResult]:
             result.outbound_date,
             result.return_date,
             tuple(
-                (s.departure_airport_code, s.departure_time, s.arrival_airport_code, s.arrival_time)
+                (
+                    s.airline_iata,
+                    s.flight_number,
+                    s.departure_airport_code,
+                    s.departure_time,
+                    s.arrival_airport_code,
+                    s.arrival_time,
+                )
                 for s in result.outbound_segments
             ),
             tuple(
-                (s.departure_airport_code, s.departure_time, s.arrival_airport_code, s.arrival_time)
+                (
+                    s.airline_iata,
+                    s.flight_number,
+                    s.departure_airport_code,
+                    s.departure_time,
+                    s.arrival_airport_code,
+                    s.arrival_time,
+                )
                 for s in result.return_segments
             ),
         )
@@ -222,10 +243,17 @@ def _dedupe_results(results: list[FlightResult]) -> list[FlightResult]:
 
 
 MAX_STAY_RETRIES = 3
+SEARCH_RETRY_BUDGET_SECONDS = 120.0
+RETRY_DELAY_SECONDS = 1.0
 
 
-async def _search_once(params: SearchParams) -> list[FlightResult]:
-    return parse_results(await fetch_search_results(params))
+def _remaining_timeout(deadline: float) -> float:
+    return min(SEARCH_TIMEOUT_SECONDS, max(1.0, deadline - time.monotonic()))
+
+
+async def _search_once(params: SearchParams, timeout: float) -> list[FlightResult]:
+    html = await fetch_search_results(params, timeout=timeout)
+    return parse_results(html, default_currency=params.currency)
 
 
 async def search_flights(params: SearchParams) -> list[FlightResult]:
@@ -237,11 +265,13 @@ async def search_flights(params: SearchParams) -> list[FlightResult]:
     1-3) even though shorter trips exist, so retry a bounded number of
     narrower stay ranges and merge whatever is found.
     """
-    results = await _search_once(params)
+    deadline = time.monotonic() + SEARCH_RETRY_BUDGET_SECONDS
+    results = await _search_once(params, _remaining_timeout(deadline))
 
-    if not results:
-        await asyncio.sleep(1)
-        results = await _search_once(params)
+    if not results and time.monotonic() < deadline:
+        await asyncio.sleep(RETRY_DELAY_SECONDS)
+        if time.monotonic() < deadline:
+            results = await _search_once(params, _remaining_timeout(deadline))
 
     if (
         results
@@ -259,8 +289,12 @@ async def search_flights(params: SearchParams) -> list[FlightResult]:
         candidates = sorted({candidates[int(i * step)] for i in range(MAX_STAY_RETRIES)})
 
     for max_stay in candidates:
+        if time.monotonic() >= deadline:
+            break
         retry_params = params.model_copy(update={"max_days_stay": max_stay})
-        retry_results = await _search_once(retry_params)
+        retry_results = await _search_once(
+            retry_params, _remaining_timeout(deadline)
+        )
         if retry_results:
             results.extend(retry_results)
 

@@ -22,7 +22,8 @@ def _parse_date(value: str) -> date:
         except ValueError:
             continue
     raise ValueError(
-        f"Invalid date {value!r}; expected YYYY-MM-DD or DD.MM.YYYY"
+        f"Invalid date {value!r}; expected YYYY-MM-DD, DD.MM.YYYY, "
+        "YYYY/MM/DD, or DD/MM/YYYY"
     )
 
 
@@ -47,6 +48,11 @@ def _normalize_time(value: str, field_name: str) -> str:
     if hours == 24 and minutes != 0:
         raise ValueError(f"Invalid {field_name} {value!r}; 24:00 is the latest time")
     return f"{hours}:{minutes:02d}"
+
+
+def _time_minutes(value: str) -> int:
+    hours, minutes = value.split(":")
+    return int(hours) * 60 + int(minutes)
 
 
 class FlightSegment(BaseModel):
@@ -132,11 +138,18 @@ class SearchParams(BaseModel):
 
     @field_validator("src_metro_code", "dst_metro_code")
     @classmethod
-    def _normalize_metro_code(cls, value: Optional[str]) -> Optional[str]:
+    def _normalize_metro_code(cls, value: Optional[str], info) -> Optional[str]:
         if value is None:
             return None
         code = value.strip().upper()
-        return code or None
+        if not code:
+            return None
+        if code not in METRO_AIRPORTS:
+            raise ValueError(
+                f"Invalid {info.field_name} {value!r}; use a metro/region code "
+                "such as MIL_ALL, IT, or DE"
+            )
+        return code
 
     @field_validator("dep_date", "arr_date")
     @classmethod
@@ -186,4 +199,31 @@ class SearchParams(BaseModel):
             raise ValueError(
                 f"dep_date ({self.dep_date}) must not be after arr_date ({self.arr_date})"
             )
+        for field_name, minimum, maximum in (
+            ("outbound", self.min_hour_outbound, self.max_hour_outbound),
+            ("inbound", self.min_hour_inbound, self.max_hour_inbound),
+            ("stay", self.min_hour_stay, self.max_hour_stay),
+        ):
+            if _time_minutes(minimum) > _time_minutes(maximum):
+                raise ValueError(
+                    f"min_hour_{field_name} ({minimum}) must not be after "
+                    f"max_hour_{field_name} ({maximum})"
+                )
+        for prefix in ("src", "dst"):
+            metro_code = getattr(self, f"{prefix}_metro_code")
+            if not metro_code:
+                continue
+            airport = getattr(self, f"{prefix}_airport")
+            ports = METRO_AIRPORTS[metro_code][1]
+            if airport in METRO_AIRPORTS:
+                if airport != metro_code:
+                    raise ValueError(
+                        f"{prefix}_airport ({airport}) conflicts with "
+                        f"{prefix}_metro_code ({metro_code})"
+                    )
+            elif airport not in ports:
+                raise ValueError(
+                    f"{prefix}_airport ({airport}) is not part of "
+                    f"{prefix}_metro_code ({metro_code})"
+                )
         return self

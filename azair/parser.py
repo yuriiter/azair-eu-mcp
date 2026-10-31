@@ -64,11 +64,11 @@ def _parse_price(text: str) -> float:
         return 0.0
 
 
-def _extract_currency(text: str) -> str:
+def _extract_currency(text: str, default: str = "EUR") -> str:
     for symbol, currency in CURRENCY_SYMBOLS:
         if symbol in text:
             return currency
-    return "EUR"
+    return default
 
 
 def _text_before_code(span: Tag) -> str:
@@ -143,7 +143,7 @@ def _parse_segments_from_detail(detail_div: Tag, currency: str) -> list[FlightSe
     return segments
 
 
-def parse_results(html: str) -> list[FlightResult]:
+def parse_results(html: str, default_currency: str = "EUR") -> list[FlightResult]:
     soup = BeautifulSoup(html, "lxml")
     reslist = soup.find(id="reslist")
     if not reslist:
@@ -160,7 +160,7 @@ def parse_results(html: str) -> list[FlightResult]:
             continue
 
         total_text = total_price_span.get_text(" ")
-        currency = _extract_currency(total_text)
+        currency = _extract_currency(total_text, default_currency)
         total_price = _parse_price(total_text)
 
         length_span = text_div.find("span", class_="lengthOfStay")

@@ -154,6 +154,9 @@ uv run python main.py
 ```bash
 uv sync
 uv run python main.py
+
+# Offline regression tests
+PYTHONPATH=. uv run python -m unittest discover -s tests -t . -v
 ```
 
 Sanity-check a search without spinning up the server:
@@ -183,7 +186,7 @@ asyncio.run(main())
 - Multi-airport and metro codes are sent as the azair web app does (bracket notation + `srcapN`/`dstapN` params)
 - Open-jaw searches automatically set azair's `transfer` flag, which is required to search different arrival/return airports
 - If azair returns nothing for a wide stay range (e.g. 1-3 days) even though shorter trips exist, the server retries a bounded number of narrower ranges and merges the results
-- Transient empty responses from azair are retried once before falling back to narrower stay ranges
+- Transient empty responses from azair are retried once before falling back to narrower stay ranges, with an overall retry budget
 - Metro and region codes set azair's `srcMC`/`dstMC` field, which is required for some country/region searches
 
 ## Notes
